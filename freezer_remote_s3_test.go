@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/aws/aws-sdk-go/aws/session"
 )
 
 func init() {
@@ -79,6 +81,20 @@ func runTestCase(testCase string, t *testing.T) {
 }
 
 func TestIntegration(t *testing.T) {
+
+	_, err := session.NewSession()
+	if err != nil {
+		t.Skipf(`Preliminary S3 session creation failed: %v
+		
+		Valid S3 credentials are required for the integration test.
+		
+		By default NewSession will only load credentials from the shared credentials file (~/.aws/credentials).
+		If the AWS_SDK_LOAD_CONFIG environment variable is set to a truthy value the Session will be created from the
+		configuration values from the shared config (~/.aws/config) and shared credentials (~/.aws/credentials) files.
+		Using the NewSessionWithOptions with SharedConfigState set to SharedConfigEnable will create the session as if the
+		AWS_SDK_LOAD_CONFIG environment variable was set.
+		> https://docs.aws.amazon.com/sdk-for-go/api/aws/session/`, err)
+	}
 
 	testCases := getTestCases()
 	t.Logf("Found testcases: %v", testCases)
