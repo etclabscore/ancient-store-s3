@@ -43,13 +43,12 @@ func runTestCase(testCase string) {
 	go func() {
 		runMain(testCase)
 	}()
-	testFilter := fmt.Sprintf("-run=%s", testCase)
 	fmt.Println("TESTCASE===================:", testCase)
-	testCmd := exec.Command("go", "test", "github.com/ethereum/go-ethereum/core", "-count=1", "-v", testFilter)
+	testCmd := exec.Command("go", "test", "github.com/ethereum/go-ethereum/core", "-count=1", "-v", "-run", testCase)
 	testCmd.Env = os.Environ()
 	testCmd.Env = append(os.Environ(), fmt.Sprintf("GETH_ANCIENT_RPC=%s", ipcPath))
 	testCmd.Stderr = os.Stderr
-	//	testCmd.Stdout = os.Stdout
+	testCmd.Stdout = os.Stdout
 	err := testCmd.Run()
 	if err != nil {
 		panic(err)
