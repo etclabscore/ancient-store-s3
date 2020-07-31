@@ -70,6 +70,9 @@ func runTestCase(testCase string, t *testing.T) {
 	testCmd.Env = append(testCmd.Env, fmt.Sprintf("GETH_ANCIENT_RPC=%s", ipcPath))
 
 	err = testCmd.Run()
+	defer func() {
+		abortChan <- os.Interrupt
+	}()
 	if err != nil {
 		t.Fatal(err)
 	}

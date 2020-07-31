@@ -14,7 +14,8 @@ import (
 )
 
 var (
-	app = cli.NewApp()
+	app       = cli.NewApp()
+	abortChan = make(chan os.Signal, 1)
 )
 
 func init() {
@@ -96,20 +97,19 @@ func run(c *cli.Context) error {
 		}
 	}()
 
-	abortChan := make(chan os.Signal, 1)
 	signal.Notify(abortChan, os.Interrupt)
 
-	defer func() {
-		// Don't bother imposing a timeout here.
+	// Don't bother imposing a timeout here.
+	for {
 		select {
 		case sig := <-abortChan:
 			log.Info("Got abort...", "signal", sig)
 			rpcServer.Stop()
+			break
 		case <-quit:
-			log.Info("S3 connection closing")
-			rpcServer.Stop()
+			log.Info("S3 connection read Close() method (client quitting)")
 		}
-	}()
+	}
 	return nil
 }
 
