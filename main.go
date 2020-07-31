@@ -30,7 +30,7 @@ func init() {
 	app.Action = run
 }
 
-func createS3FreezerService(bucketName string) *freezerRemoteS3 {
+func createS3FreezerService(bucketName string) (*freezerRemoteS3, chan struct{}) {
 	var (
 		service    *freezerRemoteS3
 		err        error
@@ -43,7 +43,7 @@ func createS3FreezerService(bucketName string) *freezerRemoteS3 {
 	if err != nil {
 		utils.Fatalf("Could not initialize S3 service: %v", err)
 	}
-	return service
+	return service, service.quit
 }
 
 func run(c *cli.Context) error {
@@ -55,7 +55,7 @@ func run(c *cli.Context) error {
 	utils.CheckExclusive(c, IPCPathFlag, HTTPListenAddrFlag.Name)
 
 	log.Info("Creating freezer service", "bucket", bucketName)
-	api := createS3FreezerService(bucketName)
+	api, quit := createS3FreezerService(bucketName)
 
 	var (
 		rpcServer *rpc.Server
@@ -104,6 +104,9 @@ func run(c *cli.Context) error {
 		select {
 		case sig := <-abortChan:
 			log.Info("Got abort...", "signal", sig)
+			rpcServer.Stop()
+		case <-quit:
+			log.Info("S3 connection closing")
 			rpcServer.Stop()
 		}
 	}()
