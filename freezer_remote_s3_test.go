@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"os/exec"
 	"strings"
@@ -10,14 +9,14 @@ import (
 )
 
 var (
-	ipcPath   = os.TempDir() + "ancient.ipc"
+	ipcPath = os.TempDir() + "ancient.ipc"
 )
 
-func runMain(bucket string) {
-	os.Setenv("AWS_REGION","us-west-1")
+func runMain(testName string) {
+	os.Setenv("AWS_REGION", "us-west-1")
 	os.Setenv("AWS_PROFILE", "developers-s3")
 
-	os.Args = append([]string{"./ancient-store-s3", "--bucket", fmt.Sprintf("etclabs-unit-test-%v", rand.Int()), "--loglevel", "3", "--ipcpath", ipcPath})
+	os.Args = append([]string{"./ancient-store-s3", "--bucket", fmt.Sprintf("etclabs-integration-test-%s", testName), "--loglevel", "3", "--ipcpath", ipcPath})
 	main()
 
 }
