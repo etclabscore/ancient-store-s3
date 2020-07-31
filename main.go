@@ -41,7 +41,7 @@ func createS3FreezerService(bucketName string) (*freezerRemoteS3, chan struct{})
 
 	service, err = newFreezerRemoteS3(bucketName, readMeter, writeMeter, sizeGauge)
 	if err != nil {
-		utils.Fatalf("Could not initialize S3 service: %w", err)
+		utils.Fatalf("Could not initialize S3 service: %v", err)
 	}
 	return service, service.quit
 }
