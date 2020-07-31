@@ -2,23 +2,24 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
-var (
-	ipcPath = os.TempDir() + "ancient.ipc"
-)
-
-func runMain(testName string) {
-	os.Setenv("AWS_REGION", "us-west-1")
-	os.Setenv("AWS_PROFILE", "developers-s3")
-
-	os.Args = append([]string{"./ancient-store-s3", "--bucket", fmt.Sprintf("etclabs-integration-test-%s", testName), "--loglevel", "3", "--ipcpath", ipcPath})
-	main()
-
+func init() {
+	if os.Getenv("AWS_REGION") == "" {
+		log.Println("Setting default AWS_REGION credential")
+		os.Setenv("AWS_REGION", "us-west-1")
+	}
+	if os.Getenv("AWS_PROFILE") == "" {
+		log.Println("Setting default AWS_PROFILE credential")
+		os.Setenv("AWS_PROFILE", "developers-s3")
+	}
 }
 
 func getTestCases() []string {
@@ -38,27 +39,50 @@ func getTestCases() []string {
 	return parsedCases
 }
 
-func runTestCase(testCase string) {
-
+func runTestCase(testCase string, t *testing.T) {
+	tmpDir, err := ioutil.TempDir(os.TempDir(), "freezer_s3_test")
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+	ipcPath := filepath.Join(tmpDir, "ancient.ipc")
 	go func() {
-		runMain(testCase)
+		// https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+		bucketName := fmt.Sprintf("ancientstore-%s", testCase)
+		bucketName = strings.ReplaceAll(bucketName, "_", "")
+		bucketName = strings.ToLower(bucketName)
+		if len(bucketName) > 63 {
+			bucketName = bucketName[:63]
+		}
+		if err := app.Run([]string{"ancient-store-s3", "--bucket", bucketName, "--loglevel", "3", "--ipcpath", ipcPath}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			log.Printf("App exited erroring: %v", err)
+			os.Exit(1)
+		}
+		fmt.Println("App exited 0")
 	}()
 	fmt.Println("TESTCASE===================:", testCase)
 	testCmd := exec.Command("go", "test", "github.com/ethereum/go-ethereum/core", "-count=1", "-v", "-run", testCase)
-	testCmd.Env = os.Environ()
-	testCmd.Env = append(os.Environ(), fmt.Sprintf("GETH_ANCIENT_RPC=%s", ipcPath))
 	testCmd.Stderr = os.Stderr
 	testCmd.Stdout = os.Stdout
-	err := testCmd.Run()
+
+	testCmd.Env = os.Environ()
+	testCmd.Env = append(testCmd.Env, fmt.Sprintf("GETH_ANCIENT_RPC=%s", ipcPath))
+
+	err = testCmd.Run()
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 }
 
 func TestIntegration(t *testing.T) {
 
 	testCases := getTestCases()
+	t.Logf("Found testcases: %v", testCases)
+
 	for _, testCase := range testCases {
-		runTestCase(testCase)
+		t.Run(testCase, func(t *testing.T) {
+			runTestCase(testCase, t)
+		})
 	}
 }
