@@ -376,30 +376,33 @@ func newFreezerRemoteS3(namespace string, readMeter, writeMeter metrics.Meter, s
 
 	// Set default cache sizes.
 	// Sizes reflect max number of entries in the cache.
-	// Cache size minimum must be greater than or equal to the group size * 2,
-	// and should not be lower than 2048 * 2 because of how the ancient store rhythm during sync is.
-	blockCacheSize := int(s3BlocksGroupSize)* 2
-	hashCacheSize := int(s3HashesGroupSize)* 2
-	if blockCacheSize < 2048 * 2 {
-		blockCacheSize = 2048 * 2
-	}
-	if hashCacheSize < 2048 * 2 {
-		hashCacheSize = 2048 * 2
-	}
+	// Cache size minimum must be greater than or equal to the group size,
+	// and should be significantly greater than sync import "processing chunks," which as a rule
+	// are typically 2048.
+	// This implementation chooses 90000 for the write cache because that is the default ancient-store
+	// limit (here, epoch), and is a value that should far exceed practical requirements.
+	// If the write-cache limit is exceeded block storage will fail since entries will be evicted
+	// from the write cache before they have been stored. This will result in a 'Non-mod group leader' error.
+	// The write cache purges entries upon successful writing (Sync) of a complete 'group'
+	// (which corresponds to an S3 Object). This acts as a limiter on practical cache use,
+	// so we expect the cache to almost certainly never approach its limit.
+	// Read cache max size will impact performance only, and will not cause
+	// fatal errors if it is met or exceeded.
+	ancientStoreEpoch := 90000
 
-	rBlockCache, err := lru.New(blockCacheSize)
+	rBlockCache, err := lru.New(int(s3BlocksGroupSize) * 4)
 	if err != nil {
 		return nil, err
 	}
-	rHashCache, err := lru.New(hashCacheSize)
+	rHashCache, err := lru.New(int(s3HashesGroupSize) * 4)
 	if err != nil {
 		return nil, err
 	}
-	wBlockCache, err := lru.New(blockCacheSize)
+	wBlockCache, err := lru.New(ancientStoreEpoch)
 	if err != nil {
 		return nil, err
 	}
-	wHashCache, err := lru.New(hashCacheSize)
+	wHashCache, err := lru.New(ancientStoreEpoch)
 	if err != nil {
 		return nil, err
 	}
@@ -706,7 +709,7 @@ func (f *freezerRemoteS3) pushCacheGroups(cache *lru.Cache, size uint64, keyFn f
 		}
 		n := keyGroup[0]
 		// insanity check
-		if n % size != 0 {
+		if n%size != 0 {
 			log.Crit("Non-mod group leader", "n", n, "object.len", len(keyGroup))
 		}
 		object := []interface{}{}
